@@ -9,9 +9,12 @@ const Box = struct ({
 	right: 10,
 	top: 0,
 	bottom: 10,
+	dragStartPosition: [0, 0],
 
 	highlighted: false,
 	needsDraw: true,
+	needsUndraw: false,
+	undrawPosition: [0, 0],
 })
 
 const makeBox = (options = {}) => {
@@ -21,16 +24,21 @@ const makeBox = (options = {}) => {
 }
 
 const drawBox = (context, box) => {
-	if (!box.needsDraw) return 0
+
+	let drawCount = 0
+
+	if (!box.needsDraw) return drawCount
+
 	box.needsDraw = false
 	const {position, dimensions} = box
 	const [x, y] = position
 	const [width, height] = dimensions
 	context.strokeStyle = Colour.Black
 	context.strokeRect(x, y, width, height)
-	context.fillStyle = box.highlighted? Colour.Blue : Colour.White
+	context.fillStyle = box.highlighted? Colour.Yellow : Colour.White
 	context.fillRect(x, y, width, height)
-	return 1
+	drawCount += 1
+	return drawCount
 }
 
 const updateBoxSides = (box) => {
@@ -48,13 +56,13 @@ const isBoxInSelection = (box, selectionStart, selectionEnd) => {
 	const [sx, sy] = selectionStart
 	const [ex, ey] = selectionEnd
 
-	const [ox, x] = sx < ex? [sx, ex] : [ex, sx]
-	const [oy, y] = sy < ey? [sy, ey] : [ey, sy]
+	const [ox, dx] = sx < ex? [sx, ex] : [ex, sx]
+	const [oy, dy] = sy < ey? [sy, ey] : [ey, sy]
 
 	if (right < ox) return false
-	if (left > x) return false
+	if (left > dx) return false
 	if (top < oy) return false
-	if (bottom > y) return false
+	if (bottom > dy) return false
 
 	return true
 
@@ -93,7 +101,7 @@ const spawnBoxes = () => {
 		const x = Random.Uint32 % innerWidth
 		const y = Random.Uint32 % innerHeight
 		const position = [x, y]
-		const dimensions = [10 + (Random.Uint8 % 20) - 10, 10 + (Random.Uint8 % 20) - 10]
+		const dimensions = [5 + (Random.Uint8 % 10) - 5, 5 + (Random.Uint8 % 10) - 5]
 		const box = makeBox({position, dimensions})
 		registerBox(box)
 	}
@@ -114,7 +122,7 @@ stage.update = (context) => {
 
 	let drawCount = 0
 	for (let i = 0; i < boxes.length; i++) {
-		if (drawCount > 1_000) break
+		if (drawCount > 2_000) break
 		const box = boxes[currentBoxIndex]
 		drawCount += drawBox(context, box)
 		currentBoxIndex++
@@ -136,6 +144,8 @@ stage.resize = () => {
 //======//
 const hand = {
 	isDown: false,
+	dragStartPosition: undefined,
+	dragOffsetPosition: undefined,
 	selectionStartPosition: undefined,
 	selectionEndPosition: undefined,
 	selectionPreviousPosition: undefined,
@@ -144,23 +154,64 @@ const hand = {
 
 on.pointerdown(e => {
 	hand.isDown = true
-	hand.selectionStartPosition = [e.clientX, e.clientY]
-	hand.selectedBoxes = new Set()
+	const position = [e.clientX, e.clientY]
+	if (isPositionInSelection(position, hand.selectionStartPosition, hand.selectionEndPosition)) {
+		hand.dragStartPosition = position
+		hand.dragOffsetPosition = getDisplacementBetweenVectors(hand.selectionStartPosition, position)
+		hand.isDragging = true
+	} else {
+		hand.selectionStartPosition = position
+		hand.selectedBoxes = new Set()
+	}
 })
 
 on.pointerup(e => {
+
+	const position = [e.clientX, e.clientY]
+	if (hand.isDragging) {
+		for (const box of hand.selectedBoxes.values()) {
+			box.dragStartPosition = box.position
+		}
+		hand.isDragging = false
+	}
+
 	hand.isDown = false
 })
 
 on.pointermove(e => {
 	if (!hand.isDown) return
 
-	
-	hand.selectionEndPosition = [e.clientX, e.clientY]
+	const position = [e.clientX, e.clientY]
+
+	if (hand.isDragging) {
+		
+		const selectionDimensions = getDisplacementBetweenVectors(hand.selectionEndPosition, hand.selectionStartPosition)
+		const newSelectionStartPosition = getAddedVectors(position, hand.dragOffsetPosition)
+		const newSelectionEndPosition = getAddedVectors(newSelectionStartPosition, selectionDimensions)
+
+		for (const box of boxes) {
+			if (!hand.selectedBoxes.has(box)) {
+				// TODO: undraw/redraw anything we uncover
+			}
+		}
+
+		hand.selectionStartPosition = newSelectionStartPosition
+		hand.selectionEndPosition = newSelectionEndPosition
+
+		const displacement = getDisplacementBetweenVectors(position, hand.dragStartPosition)
+		for (const box of hand.selectedBoxes.values()) {
+			box.position = getAddedVectors(box.dragStartPosition, displacement)
+			updateBoxSides(box)
+			box.needsDraw = true
+		}
+		return
+	}
+
+	hand.selectionEndPosition = position
 	if (hand.selectionPreviousPosition !== undefined) {
-		const distance = getDistanceBetweenTwoVectors(hand.selectionPreviousPosition, hand.selectionEndPosition)
+		const distance = getDistanceBetweenVectors(hand.selectionPreviousPosition, hand.selectionEndPosition)
 		hand.selectionPreviousPosition = hand.selectionEndPosition
-		if (distance > 10) {
+		if (distance > 5) {
 			hand.selectionIsOutOfDate = true
 			return
 		}
@@ -172,6 +223,7 @@ on.pointermove(e => {
 			if (box.highlighted) continue
 			box.highlighted = true
 			box.needsDraw = true
+			box.dragStartPosition = box.position
 			hand.selectedBoxes.add(box)
 		} else {
 			if (!box.highlighted) continue
@@ -182,16 +234,42 @@ on.pointermove(e => {
 	}
 })
 
+const isPositionInSelection = (position, startPosition, endPosition) => {
+	if (startPosition === undefined) return false
+	if (endPosition === undefined) return false
+
+	const [sx, sy] = startPosition
+	const [ex, ey] = endPosition
+
+	const [ox, dx] = sx < ex? [sx, ex] : [ex, sx]
+	const [oy, dy] = sy < ey? [sy, ey] : [ey, sy]
+
+	const [x, y] = position
+
+	if (x < ox) return false
+	if (x > dx) return false
+	if (y < oy) return false
+	if (y > dy) return false
+
+	return true
+}
+
 //========//
 // VECTOR //
 //========//
-const getDisplacementBetweenTwoVectors = (a, b) => {
+const getDisplacementBetweenVectors = (a, b) => {
 	const [ax, ay] = a
 	const [bx, by] = b
 	return [ax - bx, ay - by]
 }
 
-const getDistanceBetweenTwoVectors = (a, b) => {
-	const displacement = getDisplacementBetweenTwoVectors(a, b)
+const getDistanceBetweenVectors = (a, b) => {
+	const displacement = getDisplacementBetweenVectors(a, b)
 	return Math.abs(Math.hypot(...displacement))
+}
+
+const getAddedVectors = (a, b) => {
+	const [ax, ay] = a
+	const [bx, by] = b
+	return [ax + bx, ay + by]
 }
