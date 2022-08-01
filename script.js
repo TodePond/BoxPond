@@ -21,7 +21,7 @@ const makeBox = (options = {}) => {
 }
 
 const drawBox = (context, box) => {
-	if (!box.needsDraw) return
+	if (!box.needsDraw) return 0
 	box.needsDraw = false
 	const {position, dimensions} = box
 	const [x, y] = position
@@ -30,6 +30,7 @@ const drawBox = (context, box) => {
 	context.strokeRect(x, y, width, height)
 	context.fillStyle = box.highlighted? Colour.Blue : Colour.White
 	context.fillRect(x, y, width, height)
+	return 1
 }
 
 const updateBoxSides = (box) => {
@@ -111,10 +112,11 @@ let currentBoxIndex = 0
 stage.update = (context) => {
 	context.lineWidth = 2
 
-	
-	for (let i = 0; i < 15_000; i++) {
+	let drawCount = 0
+	for (let i = 0; i < boxes.length; i++) {
+		if (drawCount > 1_000) break
 		const box = boxes[currentBoxIndex]
-		drawBox(context, box)
+		drawCount += drawBox(context, box)
 		currentBoxIndex++
 		if (currentBoxIndex >= boxes.length) {
 			currentBoxIndex = 0
