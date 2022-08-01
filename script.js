@@ -26,8 +26,10 @@ const drawBox = (context, box) => {
 	const {position, dimensions} = box
 	const [x, y] = position
 	const [width, height] = dimensions
-	context.strokeStyle = box.highlighted? Colour.Blue : Colour.White
+	context.strokeStyle = Colour.Black
 	context.strokeRect(x, y, width, height)
+	context.fillStyle = box.highlighted? Colour.Blue : Colour.White
+	context.fillRect(x, y, width, height)
 }
 
 const updateBoxSides = (box) => {
@@ -110,7 +112,7 @@ stage.update = (context) => {
 	context.lineWidth = 2
 
 	
-	for (let i = 0; i < 20_000; i++) {
+	for (let i = 0; i < 15_000; i++) {
 		const box = boxes[currentBoxIndex]
 		drawBox(context, box)
 		currentBoxIndex++
