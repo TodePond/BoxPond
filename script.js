@@ -211,9 +211,10 @@ on.pointermove(e => {
 	if (hand.selectionPreviousPosition !== undefined) {
 		const distance = getDistanceBetweenVectors(hand.selectionPreviousPosition, hand.selectionEndPosition)
 		hand.selectionPreviousPosition = hand.selectionEndPosition
-		if (distance > 5) {
-			hand.selectionIsOutOfDate = true
-			return
+		if (distance > 10) {
+			// TODO: delay selection over a couple of frames
+			//hand.selectionIsOutOfDate = true
+			//return
 		}
 	}
 	hand.selectionPreviousPosition = hand.selectionEndPosition
