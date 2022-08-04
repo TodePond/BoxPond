@@ -122,7 +122,7 @@ stage.update = (context) => {
 
 	let drawCount = 0
 	for (let i = 0; i < boxes.length; i++) {
-		if (drawCount > 2_000) break
+		if (drawCount > 1_000) break
 		const box = boxes[currentBoxIndex]
 		drawCount += drawBox(context, box)
 		currentBoxIndex++
@@ -189,21 +189,28 @@ on.pointermove(e => {
 		const newSelectionStartPosition = getAddedVectors(position, hand.dragOffsetPosition)
 		const newSelectionEndPosition = getAddedVectors(newSelectionStartPosition, selectionDimensions)
 
+		const displacement = getDisplacementBetweenVectors(position, hand.dragStartPosition)
+
 		for (const box of boxes) {
-			if (!hand.selectedBoxes.has(box)) {
-				// TODO: undraw/redraw anything we uncover
-			}
+			if (hand.selectedBoxes.has(box)) {
+				box.position = getAddedVectors(box.dragStartPosition, displacement)
+				updateBoxSides(box)
+				box.needsDraw = true
+			} else if (isBoxInSelection(box, hand.selectionStartPosition, hand.selectionEndPosition)) {
+				box.needsDraw = true
+			} /*else if (isBoxInSelection(box, newSelectionStartPosition, newSelectionEndPosition)) {
+				box.needsDraw = true
+			}*/
 		}
 
+		
+		stage.context.fillStyle = Colour.Black
+		stage.context.fillRect(hand.selectionStartPosition[0], hand.selectionStartPosition[1], selectionDimensions[0], selectionDimensions[1])
+		//stage.context.fillRect(newSelectionStartPosition[0], newSelectionStartPosition[1], selectionDimensions[0], selectionDimensions[1])
+		
 		hand.selectionStartPosition = newSelectionStartPosition
 		hand.selectionEndPosition = newSelectionEndPosition
-
-		const displacement = getDisplacementBetweenVectors(position, hand.dragStartPosition)
-		for (const box of hand.selectedBoxes.values()) {
-			box.position = getAddedVectors(box.dragStartPosition, displacement)
-			updateBoxSides(box)
-			box.needsDraw = true
-		}
+		
 		return
 	}
 
